@@ -38,6 +38,11 @@ export default async function page() {
 								/>
 							</div>
 							<h1>@{post.profiles?.display_name}</h1>
+							<p className="text-gray-600">{post.name}</p>
+							<p className="text-gray-600">{post.description}</p>
+							<p className="text-sm text-gray-400">
+								{new Date(post.created_at).toLocaleDateString()}
+							</p>
 							<DeletePost
 								post_by={post.post_by}
 								image={post.image}
