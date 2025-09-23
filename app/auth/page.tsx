@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { KeyRound } from "lucide-react";
+import { Citrus } from "lucide-react";
 import React from "react";
 import { FcGoogle } from "react-icons/fc";
 import { FaGithub } from "react-icons/fa";
@@ -24,12 +24,12 @@ export default function Page() {
 		<div className="flex items-center justify-center w-full h-[70vh]">
 			<div className=" w-96 rounded-md border p-5 space-y-5 relative bg-slate-900">
 				<div className="flex items-center gap-2">
-					<KeyRound />
-					<h1 className="text-2xl font-bold">Next + Supabase</h1>
+					<Citrus />
+					<h1 className="text-2xl font-bold">food</h1>
 				</div>
 
 				<p className="text-sm text-gray-300">
-					Register/SignIn Today 👇
+					Sign up and we'll send you a confirmation link 🤯
 				</p>
 				<div className="flex flex-col gap-5">
 					<Button

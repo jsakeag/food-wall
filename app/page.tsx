@@ -11,7 +11,7 @@ export default async function page() {
 		.select("*,profiles(display_name)")
 		.order("created_at", { ascending: false });
 	const imgeUrlHost =
-		"https://keanyssgpgbjyamedini.supabase.co/storage/v1/object/public/images/";
+		"https://vlerrqzskxttyldnqfbe.supabase.co/storage/v1/object/public/images/";
 
 	const posts = data?.map((post) => {
 		return {
