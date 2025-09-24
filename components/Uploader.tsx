@@ -28,6 +28,19 @@ export default function Uploader() {
 	const supabase = supabaseBrowser();
 	const router = useRouter();
 
+	function sanitizeFilename(filename: string): string {
+		const name = filename.substring(0, filename.lastIndexOf('.'));
+		const extension = filename.substring(filename.lastIndexOf('.'));
+		
+		const sanitizedName = name
+			.replace(/\s+/g, '_')            // Replace spaces with underscores
+			.replace(/[^a-zA-Z0-9_-]/g, '')  // Remove special characters except _ and -
+			.replace(/_{2,}/g, '_')          // Replace multiple underscores with single
+			.replace(/^_+|_+$/g, '');       // Remove leading/trailing underscores
+		
+		return sanitizedName + extension;
+	}
+
 	const onBeforeRequest = async (req: any) => {
 		const { data } = await supabase.auth.getSession();
 		req.setHeader("Authorization", `Bearer ${data.session?.access_token}`);
@@ -79,7 +92,7 @@ export default function Uploader() {
 			uppy.setFileMeta(uppy.getFiles()[0].id, {
 				// Supabase splits objectName by "/" to get path tokens
 				objectName:
-					user?.id + "/" + randomUUID + "/" + uppy.getFiles()[0].name,
+					user?.id + "/" + randomUUID + "/" + sanitizeFilename(uppy.getFiles()[0].name),
 				metadata: JSON.stringify({ // custom metadata passed to the user_metadata column
 					desc: currentDescription,
                 }),
