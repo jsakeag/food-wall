@@ -49,6 +49,7 @@ export default function Uploader() {
 				"objectName",
 				"contentType",
 				"cacheControl",
+				"metadata",
 			],
 		})
 	);
@@ -73,23 +74,23 @@ export default function Uploader() {
 	const handleUpload = () => {
 		if (uppy.getFiles().length !== 0) {
 			const randomUUID = crypto.randomUUID();
+			const currentDescription = inputRef.current.value;
 
 			uppy.setFileMeta(uppy.getFiles()[0].id, {
+				// Supabase splits objectName by "/" to get path tokens
 				objectName:
 					user?.id + "/" + randomUUID + "/" + uppy.getFiles()[0].name,
+				metadata: JSON.stringify({ // custom metadata passed to the user_metadata column
+					desc: currentDescription,
+                }),
 			});
 
-			uppy.upload().then(async () => {
-				const description = inputRef.current.value;
-				if (description.trim()) {
-					const { error } = await supabase
-						.from("posts")
-						.update({ description: description })
-						.eq("id", randomUUID);
-					if (error) {
-						toast.error("Fail to update descriptions.");
-					}
-				}
+			uppy.upload().then(() => {
+				// No need for additional database update since trigger handles it
+				toast.success("Upload completed successfully!");
+			}).catch((error) => {
+				toast.error("Upload failed");
+				console.error(error);
 			});
 		} else {
 			toast.warning("Please adding an image");
