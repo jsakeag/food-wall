@@ -16,6 +16,7 @@ export default function RecipeCard({
 	place,
 	onRate,
 	onMenu,
+	onOpen,
 	defaultExpanded = false,
 }: {
 	recipe: Recipe;
@@ -25,6 +26,8 @@ export default function RecipeCard({
 	place?: number;
 	onRate: () => void;
 	onMenu: (recipe: Recipe) => void;
+	// Tapping one of the other cooks shows its own full card.
+	onOpen?: (recipe: Recipe) => void;
 	defaultExpanded?: boolean;
 }) {
 	const [expanded, setExpanded] = useState(defaultExpanded);
@@ -109,7 +112,12 @@ export default function RecipeCard({
 			{expanded ? (
 				<View style={styles.others}>
 					{others.map((other) => (
-						<RecipeRow key={other.id} recipe={other} onLongPress={() => onMenu(other)}>
+						<RecipeRow
+							key={other.id}
+							recipe={other}
+							onPress={onOpen && (() => onOpen(other))}
+							onLongPress={() => onMenu(other)}
+						>
 							<Pressable onPress={() => onMenu(other)} hitSlop={12}>
 								<Text style={styles.menu}>•••</Text>
 							</Pressable>

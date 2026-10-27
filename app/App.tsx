@@ -206,6 +206,8 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	const [dupeRecipe, setDupeRecipe] = useState<Recipe | null>(null);
 	// The dish whose full card is open (by group, so it stays put when its best cook changes).
 	const [detailGroupId, setDetailGroupId] = useState<string | null>(null);
+	// Which cook of that dish the full card shows (null = its best one).
+	const [detailRecipeId, setDetailRecipeId] = useState<string | null>(null);
 	const { width: screenWidth } = useWindowDimensions();
 	const sheetTopInset = useSheetTopInset();
 
@@ -299,6 +301,12 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 		sort === "recent" ? b.latest.localeCompare(a.latest) : (b.key.score ?? -1) - (a.key.score ?? -1),
 	);
 	const detailGroup = groups.find((g) => g.key.group_id === detailGroupId);
+	const detailCooks = detailGroup ? [detailGroup.key, ...detailGroup.others] : [];
+	const detailRecipe = detailCooks.find((r) => r.id === detailRecipeId) ?? detailGroup?.key;
+	// The rest of the dish's cooks, newest first, listed under the one shown.
+	const detailOthers = detailCooks
+		.filter((r) => r !== detailRecipe)
+		.sort((a, b) => b.created_at.localeCompare(a.created_at));
 	// Searching matches any cook's name or notes, and keeps each dish's place in the full ranking.
 	const search = query?.trim().toLowerCase() ?? "";
 	const shown = groups
@@ -451,7 +459,10 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 											people={people}
 											width={columnWidth}
 											place={sort === "top" ? place : undefined}
-											onPress={() => setDetailGroupId(group.key.group_id)}
+											onPress={() => {
+												setDetailRecipeId(null);
+												setDetailGroupId(group.key.group_id);
+											}}
 											onMenu={setMenuRecipe}
 										/>
 									))}
@@ -492,15 +503,18 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 							<Text style={styles.detailClose}>close</Text>
 						</Pressable>
 					</View>
-					<ScrollView contentContainerStyle={styles.detailBody}>
-						{detailGroup ? (
+					{/* Keyed by cook so switching to another one starts back at the top. */}
+					<ScrollView key={detailRecipe?.id} contentContainerStyle={styles.detailBody}>
+						{detailRecipe ? (
 							<RecipeCard
-								recipe={detailGroup.key}
-								others={detailGroup.others}
+								key={detailRecipe.id}
+								recipe={detailRecipe}
+								others={detailOthers}
 								people={people}
 								person={person}
 								defaultExpanded
-								onRate={() => fromDetail(() => openSheet("rate", detailGroup.key))}
+								onRate={() => fromDetail(() => openSheet("rate", detailRecipe))}
+								onOpen={(recipe) => setDetailRecipeId(recipe.id)}
 								onMenu={(recipe) => fromDetail(() => setMenuRecipe(recipe))}
 							/>
 						) : null}

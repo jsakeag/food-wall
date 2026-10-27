@@ -85,6 +85,8 @@ export default function LogSheet({
 	// Logged recipes that look like the same dish, and the one picked as "same as", if any.
 	const [dupes, setDupes] = useState<Recipe[]>([]);
 	const [dupeOf, setDupeOf] = useState<string | null>(null);
+	// Searching everything logged for the dupe, when the suggestions missed it (null = not searching).
+	const [dupeSearch, setDupeSearch] = useState<string | null>(null);
 
 	async function pickPhoto(source: "camera" | "library") {
 		if (source === "camera") {
@@ -157,6 +159,7 @@ export default function LogSheet({
 			const matches = likelyDupes(title, recipes);
 			if (matches.length > 0) {
 				setDupes(matches);
+				setDupeSearch(null);
 				setStep("dupe");
 				return;
 			}
@@ -193,6 +196,8 @@ export default function LogSheet({
 	}
 
 	const other = list[midpoint(search)]?.recipe;
+	const searchText = dupeSearch?.trim().toLowerCase() ?? "";
+	const searchResults = recipes.filter((r) => r.title.toLowerCase().includes(searchText));
 	const savedPhoto = existing?.photo ? photoUrl(existing.photo) : null;
 	// What the recipe will look like: a newly picked photo wins over the saved one.
 	const newPhoto = photoUri ?? savedPhoto;
@@ -215,13 +220,41 @@ export default function LogSheet({
 						<ActivityIndicator size="large" color={colors.primary} />
 					</View>
 				) : step === "dupe" ? (
-					<ScrollView contentContainerStyle={styles.form}>
-						<Text style={styles.label}>is it the same as one of these?</Text>
-						{dupes.map((recipe) => (
-							<RecipeRow key={recipe.id} recipe={recipe} onPress={() => rank(recipe.id)}>
-								<Text style={styles.sameAs}>same</Text>
-							</RecipeRow>
-						))}
+					<ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+						<Text style={styles.label}>
+							{dupeSearch === null ? "is it the same as one of these?" : "which one is it the same as?"}
+						</Text>
+						{dupeSearch === null ? (
+							<>
+								{dupes.map((recipe) => (
+									<RecipeRow key={recipe.id} recipe={recipe} onPress={() => rank(recipe.id)}>
+										<Text style={styles.sameAs}>same</Text>
+									</RecipeRow>
+								))}
+								<Pressable onPress={() => setDupeSearch("")} hitSlop={8}>
+									<Text style={styles.link}>search for something else…</Text>
+								</Pressable>
+							</>
+						) : (
+							<>
+								<TextInput
+									style={styles.input}
+									placeholder="search everything you've logged"
+									placeholderTextColor={colors.muted}
+									keyboardAppearance="dark"
+									value={dupeSearch}
+									onChangeText={setDupeSearch}
+									autoFocus
+									autoCorrect={false}
+								/>
+								{searchResults.map((recipe) => (
+									<RecipeRow key={recipe.id} recipe={recipe} onPress={() => rank(recipe.id)}>
+										<Text style={styles.sameAs}>same</Text>
+									</RecipeRow>
+								))}
+								{searchResults.length === 0 ? <Text style={styles.noResults}>nothing matches</Text> : null}
+							</>
+						)}
 						<Pressable style={styles.secondaryButton} onPress={() => rank(null)}>
 							<Text style={styles.secondaryButtonText}>{"no, it's something new"}</Text>
 						</Pressable>
@@ -546,6 +579,19 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		fontFamily: fonts.semibold,
 		color: colors.text,
+	},
+	link: {
+		textAlign: "center",
+		paddingVertical: 4,
+		fontSize: 15,
+		fontFamily: fonts.semibold,
+		color: colors.primary,
+	},
+	noResults: {
+		textAlign: "center",
+		fontSize: 15,
+		fontFamily: fonts.regular,
+		color: colors.muted,
 	},
 	sameAs: {
 		fontSize: 14,
