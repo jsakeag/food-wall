@@ -1,9 +1,18 @@
 import * as SecureStore from "expo-secure-store";
 import { Alert, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Small wrappers so the same code runs as the iPhone app and the home-screen web app.
 
 export const isWeb = Platform.OS === "web";
+
+// Space to leave above a full-screen sheet's header. Opened from the home screen, the web app draws
+// under the status bar, so its sheets need that much room or their cancel/back buttons can't be
+// tapped. iOS page sheets already start below the status bar.
+export function useSheetTopInset() {
+	const { top } = useSafeAreaInsets();
+	return isWeb ? top : 0;
+}
 
 export const storage = {
 	async get(key: string): Promise<string | null> {

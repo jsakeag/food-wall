@@ -17,7 +17,7 @@ import {
 import { createRecipe, photoUrl, rateRecipe, ratingBy, updateRecipe, type Bucket, type Recipe } from "../lib/api";
 import { likelyDupes } from "../lib/dupes";
 import { answer, isDone, midpoint, positionAt, startSearch, tie, type Search } from "../lib/ranking";
-import { isWeb, notify } from "../lib/platform";
+import { isWeb, notify, useSheetTopInset } from "../lib/platform";
 import { BUCKETS, colors, fonts, radius } from "../lib/theme";
 import RecipeRow from "./RecipeRow";
 
@@ -67,6 +67,7 @@ export default function LogSheet({
 	onClose: () => void;
 	onSaved: () => void;
 }) {
+	const topInset = useSheetTopInset();
 	const [step, setStep] = useState<"form" | "dupe" | "compare" | "saving">("form");
 	const [photoUri, setPhotoUri] = useState<string | null>(null);
 	const [madeAt, setMadeAt] = useState<string | null>(null);
@@ -200,7 +201,7 @@ export default function LogSheet({
 
 	return (
 		<Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-			<KeyboardAvoidingView behavior="padding" style={styles.sheet}>
+			<KeyboardAvoidingView behavior="padding" style={[styles.sheet, { paddingTop: topInset }]}>
 				<View style={styles.header}>
 					<Pressable onPress={step === "form" ? onClose : () => setStep("form")} hitSlop={12}>
 						<Text style={styles.headerButton}>{step === "form" ? "cancel" : "back"}</Text>

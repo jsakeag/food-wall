@@ -39,7 +39,7 @@ import {
 	type Recipe,
 } from "./lib/api";
 import { groupDupes, type Group } from "./lib/dupes";
-import { confirm, isWeb, notify, storage } from "./lib/platform";
+import { confirm, isWeb, notify, storage, useSheetTopInset } from "./lib/platform";
 import { colors, fonts, glow, radius } from "./lib/theme";
 
 const PERSON_KEY = "person";
@@ -199,6 +199,7 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	// The dish whose full card is open (by group, so it stays put when its best cook changes).
 	const [detailGroupId, setDetailGroupId] = useState<string | null>(null);
 	const { width: screenWidth } = useWindowDimensions();
+	const sheetTopInset = useSheetTopInset();
 
 	const load = useCallback(async () => {
 		try {
@@ -395,7 +396,7 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 				presentationStyle="pageSheet"
 				onRequestClose={() => setDetailGroupId(null)}
 			>
-				<View style={styles.detail}>
+				<View style={[styles.detail, { paddingTop: sheetTopInset }]}>
 					<View style={styles.detailHeader}>
 						<Pressable onPress={() => setDetailGroupId(null)} hitSlop={12}>
 							<Text style={styles.detailClose}>close</Text>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Recipe } from "../lib/api";
 import { likelyDupes } from "../lib/dupes";
+import { useSheetTopInset } from "../lib/platform";
 import { colors, fonts, radius } from "../lib/theme";
 import RecipeRow from "./RecipeRow";
 
@@ -17,6 +18,7 @@ export default function DupePicker({
 	onClose: () => void;
 	onPick: (dupeOf: Recipe) => void;
 }) {
+	const topInset = useSheetTopInset();
 	const [query, setQuery] = useState("");
 	const choices = recipe ? recipes.filter((r) => r.group_id !== recipe.group_id) : [];
 	const suggested = recipe ? likelyDupes(recipe.title, choices) : [];
@@ -25,7 +27,7 @@ export default function DupePicker({
 
 	return (
 		<Modal visible={recipe !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-			<View style={styles.sheet}>
+			<View style={[styles.sheet, { paddingTop: topInset }]}>
 				<View style={styles.header}>
 					<Pressable onPress={onClose} hitSlop={12}>
 						<Text style={styles.headerButton}>cancel</Text>
