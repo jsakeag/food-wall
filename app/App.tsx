@@ -187,6 +187,8 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	const [refreshing, setRefreshing] = useState(false);
 	const [sort, setSort] = useState<keyof typeof SORTS>("recent");
 	const [sortOpen, setSortOpen] = useState(false);
+	// null = search closed; otherwise what's typed so far.
+	const [query, setQuery] = useState<string | null>(null);
 	const [sheetOpen, setSheetOpen] = useState(false);
 	const [sheetMode, setSheetMode] = useState<SheetMode>("new");
 	// The recipe being rated or edited (null when logging a new one).
@@ -291,15 +293,22 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 		sort === "recent" ? b.latest.localeCompare(a.latest) : (b.key.score ?? -1) - (a.key.score ?? -1),
 	);
 	const detailGroup = groups.find((g) => g.key.group_id === detailGroupId);
+	// Searching matches any cook's name or notes, and keeps each dish's place in the full ranking.
+	const search = query?.trim().toLowerCase() ?? "";
+	const shown = groups
+		.map((group, index) => ({ group, place: index + 1 }))
+		.filter(({ group }) =>
+			[group.key, ...group.others].some((r) => `${r.title} ${r.note ?? ""}`.toLowerCase().includes(search)),
+		);
 
 	// Two-column masonry: each card goes into whichever column is shorter so far, so cards earlier
 	// in the order (newer, or better rated) always sit higher up the screen.
 	const columnWidth = (screenWidth - LIST_PADDING * 2 - COLUMN_GAP) / 2;
 	const columns: { group: Group; place: number }[][] = [[], []];
 	const heights = [0, 0];
-	groups.forEach((group, index) => {
+	shown.forEach(({ group, place }) => {
 		const column = heights[0] <= heights[1] ? 0 : 1;
-		columns[column].push({ group, place: index + 1 });
+		columns[column].push({ group, place });
 		heights[column] += gridCardHeight(group, columnWidth);
 	});
 
@@ -312,14 +321,49 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 				</Pressable>
 			</View>
 			<View style={styles.sortRow}>
-				<Pressable
-					style={({ pressed }) => [styles.sortButton, sortOpen && styles.sortButtonOpen, pressed && styles.pressed]}
-					onPress={() => setSortOpen(!sortOpen)}
-				>
-					<Text style={styles.sortLabel}>sort</Text>
-					<Text style={styles.sortValue}>{SORTS[sort]}</Text>
-					<Text style={styles.sortLabel}>{sortOpen ? "▴" : "▾"}</Text>
-				</Pressable>
+				{query === null ? (
+					<>
+						<Pressable
+							style={({ pressed }) => [styles.sortButton, sortOpen && styles.sortButtonOpen, pressed && styles.pressed]}
+							onPress={() => setSortOpen(!sortOpen)}
+						>
+							<Text style={styles.sortLabel}>sort</Text>
+							<Text style={styles.sortValue}>{SORTS[sort]}</Text>
+							<Text style={styles.sortLabel}>{sortOpen ? "▴" : "▾"}</Text>
+						</Pressable>
+						<Pressable
+							style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}
+							onPress={() => {
+								setSortOpen(false);
+								setQuery("");
+							}}
+							hitSlop={8}
+							accessibilityLabel="search"
+						>
+							<SearchIcon />
+						</Pressable>
+					</>
+				) : (
+					<>
+						<View style={styles.searchField}>
+							<SearchIcon />
+							<TextInput
+								style={styles.searchInput}
+								placeholder="search recipes"
+								placeholderTextColor={colors.muted}
+								keyboardAppearance="dark"
+								value={query}
+								onChangeText={setQuery}
+								autoFocus
+								autoCorrect={false}
+								returnKeyType="search"
+							/>
+						</View>
+						<Pressable onPress={() => setQuery(null)} hitSlop={12}>
+							<Text style={styles.searchCancel}>cancel</Text>
+						</Pressable>
+					</>
+				)}
 				{sortOpen ? (
 					<View style={styles.dropdown}>
 						{(Object.keys(SORTS) as (keyof typeof SORTS)[]).map((s) => (
@@ -353,10 +397,14 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 						<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />
 					}
 				>
-					{groups.length === 0 ? (
+					{shown.length === 0 ? (
 						<View style={styles.empty}>
 							<Image source={nailong} style={styles.emptyImage} />
-							<Text style={styles.emptyText}>nothing yet 🤯 tap + to log something you cooked</Text>
+							<Text style={styles.emptyText}>
+								{groups.length === 0
+									? "nothing yet 🤯 tap + to log something you cooked"
+									: `nothing matches "${query?.trim()}" 🤯`}
+							</Text>
 						</View>
 					) : (
 						<View style={styles.columns}>
@@ -444,6 +492,16 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	);
 }
 
+// A magnifying glass drawn with views, so it doesn't depend on an icon font.
+function SearchIcon() {
+	return (
+		<View style={styles.searchIcon}>
+			<View style={styles.searchIconLens} />
+			<View style={styles.searchIconHandle} />
+		</View>
+	);
+}
+
 function ErrorMessage({ message, onRetry }: { message: string; onRetry: () => void }) {
 	return (
 		<View style={styles.errorBox}>
@@ -499,6 +557,10 @@ const styles = StyleSheet.create({
 	},
 	sortRow: {
 		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
+		minHeight: 36,
 		marginHorizontal: 20,
 		marginVertical: 14,
 		// Keeps the dropdown above the list and the backdrop.
@@ -527,6 +589,63 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		fontFamily: fonts.semibold,
 		color: colors.text,
+	},
+	searchButton: {
+		width: 36,
+		height: 36,
+		borderRadius: radius.lg,
+		borderWidth: 1,
+		borderColor: colors.border,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	searchField: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		height: 36,
+		borderRadius: radius.lg,
+		borderWidth: 1,
+		borderColor: colors.muted,
+		backgroundColor: colors.card,
+		paddingHorizontal: 12,
+	},
+	searchInput: {
+		flex: 1,
+		height: "100%",
+		// 16px keeps iOS Safari from zooming in when the field is focused.
+		fontSize: 16,
+		fontFamily: fonts.regular,
+		color: colors.text,
+		// The field's own border shows focus; drop the browser's outline (a web-only value).
+		...(isWeb ? ({ outlineStyle: "none" } as object) : {}),
+	},
+	searchCancel: {
+		fontSize: 15,
+		fontFamily: fonts.medium,
+		color: colors.primary,
+	},
+	searchIcon: {
+		width: 16,
+		height: 16,
+	},
+	searchIconLens: {
+		width: 12,
+		height: 12,
+		borderRadius: 6,
+		borderWidth: 2,
+		borderColor: colors.muted,
+	},
+	searchIconHandle: {
+		position: "absolute",
+		right: 0,
+		bottom: 1,
+		width: 6,
+		height: 2,
+		borderRadius: 1,
+		backgroundColor: colors.muted,
+		transform: [{ rotate: "45deg" }],
 	},
 	dropdown: {
 		position: "absolute",

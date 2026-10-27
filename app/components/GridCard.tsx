@@ -9,7 +9,8 @@ const TITLE_LINES = 3;
 
 // About how tall a card will be, so the grid can drop each card into the shorter column.
 export function gridCardHeight({ key }: Group, width: number) {
-	const charsPerLine = Math.max(1, Math.floor(width / 8));
+	// Inter semibold at 14px averages about 7px a character.
+	const charsPerLine = Math.max(1, Math.floor(width / 7));
 	const lines = Math.min(TITLE_LINES, Math.ceil(key.title.length / charsPerLine));
 	return width / photoAspect(key) + 8 + lines * TITLE_LINE + 6 + 24 + styles.card.marginBottom;
 }
