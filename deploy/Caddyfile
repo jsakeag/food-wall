@@ -1,0 +1,20 @@
+{$DOMAIN} {
+	request_body {
+		max_size 12MB
+	}
+
+	# API: /api/recipes -> localhost:3000/recipes
+	handle_path /api/* {
+		reverse_proxy localhost:3000
+	}
+
+	# Home-screen web app (built by deploy.sh)
+	handle {
+		root * /opt/mock-beli/web
+		# Recheck with the server on every launch (a quick 304 when nothing changed), so the
+		# home-screen app picks up a deploy right away instead of running a stale copy.
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

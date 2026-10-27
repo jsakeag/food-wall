@@ -1,0 +1,8 @@
+possibly in future:
+- undo button for last decision
+- keyboard in way of save button sometimes when typing notes, maybe undo
+- direct reorder feature like how beli does it and then it recalculates based on your reordering
+- dupe feature, like if we make the same recipe twice we can post it as a dupe under an existing one
+- maybe seasons of cooking?
+- lazy loading / performance improvements
+- rating buttons have nailong emotes on them instead of emojis

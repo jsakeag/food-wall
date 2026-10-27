@@ -1,70 +1,79 @@
-## Getting Started
+# mock-beli
 
-First, run the development server:
+Beli, but for recipes you've cooked. Two people share one list; each recipe's score is the average of both people's ratings.
+
+```
+app/      Expo (React Native) app — one screen: shared list (recent / top), + to log.
+          Ships as a home-screen web app (Safari → Add to Home Screen); also runs in Expo Go.
+server/   Node + Express + Postgres API, photos saved to disk
+deploy/   DigitalOcean Droplet setup (Postgres, Caddy HTTPS, systemd, nightly backups)
+```
+
+How ranking works: each person rates a recipe by picking Loved / Fine / Didn't like, then answering
+"Which was better?" against their own ratings in that bucket (binary search, ~log₂ n taps). A person's
+score = position within the bucket's range (Loved 7–10, Fine 4–7, Didn't like 0–4); the recipe's score
+is the average of both people's scores. Logging a recipe rates it for you; the other person taps "rate it".
+
+## Run locally
+
+Needs Node 24+ and Postgres.
 
 ```bash
-npm i
-npm run dev
+# server
+createdb mock_beli
+cd server && cp .env.example .env   # set API_KEY and PEOPLE
+npm install && npm run dev
+
+# app (in another terminal)
+cd app && cp .env.example .env      # API URL = your Mac's Wi-Fi IP, e.g. http://192.168.1.20:3000
+npm install && npx expo start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Scan the QR code with the iPhone Camera app to open it in **Expo Go** (phone and Mac on the same Wi-Fi),
+or press `w` and open `http://<your Mac's IP>:8081` in Safari to try the web version (its passcode is
+`API_KEY` from `server/.env`). Find your Mac's IP with `ipconfig getifaddr en0`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy (DigitalOcean)
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+1. Create a $6 Ubuntu 24.04 Droplet and add your SSH key.
+2. From your Mac:
+   ```bash
+   ./deploy/deploy.sh <droplet-ip>
+   ssh root@<droplet-ip> 'bash /opt/mock-beli/deploy/setup.sh "Keagan,Michelle"'
+   ```
+   It prints the site's address (an HTTPS `*.sslip.io` URL) and the passcode.
+3. On each iPhone: open the address in **Safari** → Share → **Add to Home Screen**, then enter the
+   passcode and pick your name. It opens full screen with the nailong icon.
+4. Later updates: `./deploy/deploy.sh <droplet-ip>` (rebuilds the web app, updates the server).
 
-## Learn More
+The Droplet serves the web app at `/` and the API at `/api` (see `deploy/Caddyfile`).
 
--   [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
--   [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
--   [Supabase](https://supabase.com/) - Build in a weekend Scale to millions.
--   [Shadcn](https://ui.shadcn.com/) - Build your component library.
--   [React Query](https://tanstack.com/query/latest/) - TanStack Query.
+Backups land in `/var/backups/mock-beli` on the Droplet nightly. Turn on DigitalOcean's Droplet
+backups too if you want copies off the machine (photos live in `/var/lib/mock-beli/uploads`).
 
-## Profile table
+## Using the app
 
-```sql
-create table
-  public.profiles (
-    id uuid not null,
-    created_at timestamp with time zone not null default now(),
-    email text not null,
-    display_name text null,
-    image_url text null,
-    constraint profiles_pkey primary key (id),
-    constraint profiles_id_fkey foreign key (id) references auth.users (id) on update cascade on delete cascade
-  ) tablespace pg_default;
+- First launch asks for the passcode (web only) and "Who are you?". Tap your initial in the header to switch.
+- **+** logs a recipe; **rate it** adds your rating to one the other person logged.
+- **•••** on a recipe (or long-press it) to edit details, redo your rating, or delete it.
+
+## Old food-gallery data
+
+The Supabase backup lives in `data/supabase-backup/` (gitignored). Posts become unrated recipes with
+their original photo and date; re-running skips ones already imported.
+
+Locally, from `server/`:
+```bash
+node --env-file=.env scripts/import-supabase.ts \
+  ../data/supabase-backup/db_cluster-22-10-2025@09-10-40.backup \
+  ../data/supabase-backup/vlerrqzskxttyldnqfbe/images \
+  "jsakeag=Keagan,mmli1=Michelle"
 ```
 
-## Auth Trigger Function
-
-```sql
-begin
-
-  insert into public.profiles(id,email,display_name,image_url)
-  values(
-    new.id,
-    new.raw_user_meta_data ->> 'email',
-    COALESCE(new.raw_user_meta_data ->> 'user_name',new.raw_user_meta_data ->> 'name'),
-    new.raw_user_meta_data ->> 'avatar_url'
-  );
-  return new;
-
-end;
+On the Droplet (after setup), from your Mac:
+```bash
+rsync -az --exclude '*.zip' --exclude '*.gz' data/supabase-backup root@<droplet-ip>:/opt/mock-beli/data/
+ssh root@<droplet-ip> "sudo -u mockbeli bash -c 'cd /opt/mock-beli/server && node --env-file=.env scripts/import-supabase.ts \
+  ../data/supabase-backup/db_cluster-22-10-2025@09-10-40.backup ../data/supabase-backup/vlerrqzskxttyldnqfbe/images \
+  \"jsakeag=Keagan,mmli1=Michelle\"'"
 ```
-
-### Auth Trigger Creation
-
-```sql
-create trigger create_user_on_signup
-after insert on auth.users for each row
-execute function create_user_on_signup ();
-```
-
-### Remove Trigger
-
-```sql
-drop trigger create_user_on_signup on auth.users;
-```
-
-npm install @uppy/react @uppy/dashboard @uppy/drag-drop @uppy/progress-bar @uppy/status-bar @uppy/file-input

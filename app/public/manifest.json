@@ -1,0 +1,12 @@
+{
+  "name": "nailong kitchen",
+  "short_name": "nailong kitchen",
+  "icons": [
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#020817",
+  "background_color": "#020817"
+}

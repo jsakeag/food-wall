@@ -1,0 +1,15 @@
+[Unit]
+Description=mock-beli API
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=mockbeli
+WorkingDirectory=/opt/mock-beli/server
+ExecStart=/usr/bin/node --env-file=.env src/index.ts
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

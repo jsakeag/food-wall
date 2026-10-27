@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "nailong kitchen",
+    "slug": "mock-beli",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mockbeli.recipes"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a photo of what you cooked.",
+          "cameraPermission": "Take a photo of what you cooked."
+        }
+      ],
+      "expo-status-bar",
+      "expo-font"
+    ],
+    "backgroundColor": "#020817",
+    "web": {
+      "output": "single",
+      "bundler": "metro",
+      "name": "nailong kitchen",
+      "shortName": "nailong kitchen",
+      "themeColor": "#020817",
+      "backgroundColor": "#020817"
+    }
+  }
+}
