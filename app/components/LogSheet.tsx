@@ -48,6 +48,9 @@ async function photoTakenAt(asset: ImagePicker.ImagePickerAsset): Promise<string
 
 export type SheetMode = "new" | "rate" | "edit";
 
+// Best bucket first.
+const BUCKET_ORDER: Record<Bucket, number> = { loved: 0, fine: 1, disliked: 2 };
+
 // "new" logs a recipe (and rates it), "rate" adds or redoes this person's rating of `recipe`,
 // "edit" changes `recipe`'s name, link, notes or photo.
 export default function LogSheet({
@@ -170,12 +173,21 @@ export default function LogSheet({
 	// Rate it against this person's other recipes in the bucket (each cook of a dupe is rated too).
 	function rank(sameAs: string | null) {
 		setDupeOf(sameAs);
-		const candidates = recipes
-			.filter((r) => r.id !== existing?.id)
-			.flatMap((recipe) => {
-				const mine = ratingBy(recipe, person);
-				return mine?.bucket === bucket ? [{ recipe, position: mine.position }] : [];
-			})
+		// A dish cooked more than once is compared once, against this person's best cook of it.
+		const best = new Map<string, { recipe: Recipe; bucket: Bucket; position: number }>();
+		for (const recipe of recipes) {
+			const mine = recipe.id !== existing?.id ? ratingBy(recipe, person) : undefined;
+			if (!mine) continue;
+			const current = best.get(recipe.group_id);
+			const better =
+				!current ||
+				BUCKET_ORDER[mine.bucket] < BUCKET_ORDER[current.bucket] ||
+				(mine.bucket === current.bucket && mine.position > current.position);
+			if (better) best.set(recipe.group_id, { recipe, bucket: mine.bucket, position: mine.position });
+		}
+		const candidates = [...best.values()]
+			.filter((b) => b.bucket === bucket)
+			.map(({ recipe, position }) => ({ recipe, position }))
 			.sort((a, b) => b.position - a.position);
 		if (candidates.length === 0) return save(positionAt(candidates, 0), sameAs);
 		setList(candidates);
@@ -280,6 +292,20 @@ export default function LogSheet({
 						{history.length > 0 ? (
 							<Pressable style={styles.undoButton} onPress={undo} hitSlop={12}>
 								<Text style={styles.undoText}>↩ undo</Text>
+							</Pressable>
+						) : null}
+						{/* For dupes the name check missed: search for it, then rank again as its dupe. */}
+						{mode === "new" && !dupeOf ? (
+							<Pressable
+								style={styles.dupeLinkButton}
+								onPress={() => {
+									setDupes([]);
+									setDupeSearch("");
+									setStep("dupe");
+								}}
+								hitSlop={8}
+							>
+								<Text style={styles.dupeLink}>cooked this before? mark it as a dupe</Text>
 							</Pressable>
 						) : null}
 					</View>
@@ -610,6 +636,16 @@ const styles = StyleSheet.create({
 		alignSelf: "center",
 		paddingVertical: 6,
 		paddingHorizontal: 12,
+	},
+	dupeLinkButton: {
+		alignSelf: "center",
+		marginTop: 8,
+	},
+	dupeLink: {
+		fontSize: 13,
+		fontFamily: fonts.regular,
+		color: colors.muted,
+		textDecorationLine: "underline",
 	},
 	undoText: {
 		fontSize: 15,
