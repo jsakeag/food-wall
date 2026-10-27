@@ -27,6 +27,7 @@ import GridCard, { gridCardHeight } from "./components/GridCard";
 import LogSheet, { type SheetMode } from "./components/LogSheet";
 import MenuSheet, { type MenuAction } from "./components/MenuSheet";
 import RecipeCard from "./components/RecipeCard";
+import ReorderSheet from "./components/ReorderSheet";
 import {
 	deleteRecipe,
 	getPeople,
@@ -189,6 +190,11 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	const [sortOpen, setSortOpen] = useState(false);
 	// null = search closed; otherwise what's typed so far.
 	const [query, setQuery] = useState<string | null>(null);
+	// The ••• menu next to sort (search, reorder).
+	const [moreOpen, setMoreOpen] = useState(false);
+	const [reorderOpen, setReorderOpen] = useState(false);
+	// Remounting the reorder sheet starts it from the latest list each time.
+	const [reorderKey, setReorderKey] = useState(0);
 	const [sheetOpen, setSheetOpen] = useState(false);
 	const [sheetMode, setSheetMode] = useState<SheetMode>("new");
 	// The recipe being rated or edited (null when logging a new one).
@@ -325,22 +331,25 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 					<>
 						<Pressable
 							style={({ pressed }) => [styles.sortButton, sortOpen && styles.sortButtonOpen, pressed && styles.pressed]}
-							onPress={() => setSortOpen(!sortOpen)}
+							onPress={() => {
+								setMoreOpen(false);
+								setSortOpen(!sortOpen);
+							}}
 						>
 							<Text style={styles.sortLabel}>sort</Text>
 							<Text style={styles.sortValue}>{SORTS[sort]}</Text>
 							<Text style={styles.sortLabel}>{sortOpen ? "▴" : "▾"}</Text>
 						</Pressable>
 						<Pressable
-							style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}
+							style={({ pressed }) => [styles.moreButton, moreOpen && styles.sortButtonOpen, pressed && styles.pressed]}
 							onPress={() => {
 								setSortOpen(false);
-								setQuery("");
+								setMoreOpen(!moreOpen);
 							}}
 							hitSlop={8}
-							accessibilityLabel="search"
+							accessibilityLabel="more"
 						>
-							<SearchIcon />
+							<Text style={styles.moreText}>•••</Text>
 						</Pressable>
 					</>
 				) : (
@@ -379,6 +388,31 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 								{sort === s ? <Text style={styles.dropdownCheck}>✓</Text> : null}
 							</Pressable>
 						))}
+					</View>
+				) : null}
+				{moreOpen ? (
+					<View style={[styles.dropdown, styles.dropdownRight]}>
+						<Pressable
+							style={({ pressed }) => [styles.dropdownOption, pressed && styles.dropdownPressed]}
+							onPress={() => {
+								setMoreOpen(false);
+								setQuery("");
+							}}
+						>
+							<Text style={[styles.dropdownText, styles.dropdownTextActive]}>search</Text>
+							<SearchIcon />
+						</Pressable>
+						<Pressable
+							style={({ pressed }) => [styles.dropdownOption, pressed && styles.dropdownPressed]}
+							onPress={() => {
+								setMoreOpen(false);
+								setReorderKey((k) => k + 1);
+								setReorderOpen(true);
+							}}
+						>
+							<Text style={[styles.dropdownText, styles.dropdownTextActive]}>reorder my list</Text>
+							<Text style={styles.dropdownIcon}>⇅</Text>
+						</Pressable>
 					</View>
 				) : null}
 			</View>
@@ -429,7 +463,15 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 			)}
 
 			{/* Tapping anywhere else closes the sort dropdown. */}
-			{sortOpen ? <Pressable style={styles.backdrop} onPress={() => setSortOpen(false)} /> : null}
+			{sortOpen || moreOpen ? (
+				<Pressable
+					style={styles.backdrop}
+					onPress={() => {
+						setSortOpen(false);
+						setMoreOpen(false);
+					}}
+				/>
+			) : null}
 
 			<Pressable
 				style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
@@ -467,6 +509,18 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 			</Modal>
 
 			<MenuSheet title={menuRecipe?.title ?? ""} actions={menuActions} onClose={() => setMenuRecipe(null)} />
+
+			<ReorderSheet
+				key={reorderKey}
+				visible={reorderOpen}
+				person={person}
+				recipes={recipes ?? []}
+				onClose={() => setReorderOpen(false)}
+				onSaved={() => {
+					setReorderOpen(false);
+					load();
+				}}
+			/>
 
 			<DupePicker
 				recipe={dupeRecipe}
@@ -590,14 +644,29 @@ const styles = StyleSheet.create({
 		fontFamily: fonts.semibold,
 		color: colors.text,
 	},
-	searchButton: {
-		width: 36,
+	moreButton: {
+		width: 44,
 		height: 36,
 		borderRadius: radius.lg,
 		borderWidth: 1,
 		borderColor: colors.border,
 		alignItems: "center",
 		justifyContent: "center",
+	},
+	moreText: {
+		fontSize: 14,
+		letterSpacing: 1,
+		color: colors.text,
+	},
+	dropdownRight: {
+		left: undefined,
+		right: 0,
+	},
+	dropdownIcon: {
+		width: 16,
+		textAlign: "center",
+		fontSize: 16,
+		color: colors.muted,
 	},
 	searchField: {
 		flex: 1,

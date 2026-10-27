@@ -152,6 +152,15 @@ export async function unlinkDupe(id: string) {
 	await request(`/recipes/${id}/group`, { method: "DELETE" });
 }
 
+// Saves a reordered list of this person's ratings in one go.
+export async function saveOrder(person: string, ratings: { recipe_id: string; bucket: Bucket; position: number }[]) {
+	await request(`/ratings/${encodeURIComponent(person)}`, {
+		method: "PUT",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ ratings }),
+	});
+}
+
 export function ratingBy(recipe: Recipe, person: string) {
 	return recipe.ratings.find((r) => r.person === person);
 }

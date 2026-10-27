@@ -30,10 +30,11 @@ export const radius = {
 // The auth page's glowBox: white core, magenta then cyan halo.
 export const glow = "0 0 60px 30px #fff, 0 0 100px 60px #f0f, 0 0 140px 90px #0ff";
 
-export const BUCKETS: { value: Bucket; label: string; image: ImageSourcePropType }[] = [
-	{ value: "loved", label: "loved it", image: require("../assets/nailong_good.png") },
-	{ value: "fine", label: "it was fine", image: require("../assets/nailong_okay.png") },
-	{ value: "disliked", label: "didn't like it", image: require("../assets/nailong_bad.png") },
+// `range` is the span of scores a bucket's recipes spread across (same as the server's BUCKET_RANGES).
+export const BUCKETS: { value: Bucket; label: string; image: ImageSourcePropType; range: [number, number] }[] = [
+	{ value: "loved", label: "loved it", image: require("../assets/nailong_good.png"), range: [7, 10] },
+	{ value: "fine", label: "it was fine", image: require("../assets/nailong_okay.png"), range: [4, 7] },
+	{ value: "disliked", label: "didn't like it", image: require("../assets/nailong_bad.png"), range: [0, 4] },
 ];
 
 export function timeAgo(dateString: string) {

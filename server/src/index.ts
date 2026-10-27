@@ -316,6 +316,42 @@ app.put("/recipes/:id/ratings/:person", express.json(), async (req, res) => {
 	res.status(204).end();
 });
 
+// Save a reordered list: one person's ratings with their new buckets and positions, all at once.
+app.put("/ratings/:person", express.json(), async (req, res) => {
+	const { person } = req.params;
+	const ratings: unknown = req.body?.ratings;
+	if (!Array.isArray(ratings)) {
+		res.status(400).json({ error: "ratings must be a list" });
+		return;
+	}
+	for (const r of ratings) {
+		const error =
+			ratingError(person, r?.bucket, Number(r?.position)) ??
+			(typeof r?.recipe_id === "string" && isUuid(r.recipe_id) ? null : "Invalid recipe");
+		if (error) {
+			res.status(400).json({ error });
+			return;
+		}
+	}
+	const client = await pool.connect();
+	try {
+		await client.query("begin");
+		for (const r of ratings) {
+			await client.query(
+				"update ratings set bucket = $3, position = $4 where recipe_id = $1 and person = $2",
+				[r.recipe_id, person, r.bucket, Number(r.position)],
+			);
+		}
+		await client.query("commit");
+	} catch (err) {
+		await client.query("rollback");
+		throw err;
+	} finally {
+		client.release();
+	}
+	res.status(204).end();
+});
+
 app.delete("/recipes/:id", async (req, res) => {
 	if (!isUuid(req.params.id)) {
 		res.status(404).json({ error: "Not found" });
