@@ -28,3 +28,13 @@ export async function shrinkPhoto(filePath: string, { deleteOriginal = true } = 
 	if (deleteOriginal) await unlink(filePath).catch(() => {});
 	return path.basename(output);
 }
+
+// A photo's width and height as it appears upright, or nulls if it can't be read.
+export async function photoSize(filePath: string): Promise<{ width: number | null; height: number | null }> {
+	try {
+		const { autoOrient } = await sharp(filePath).metadata();
+		return { width: autoOrient.width, height: autoOrient.height };
+	} catch {
+		return { width: null, height: null };
+	}
+}

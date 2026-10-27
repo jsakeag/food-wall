@@ -43,6 +43,9 @@ export type Recipe = {
 	source_url: string | null;
 	note: string | null;
 	photo: string | null;
+	// The photo's upright size (null for old photos not measured yet).
+	photo_width: number | null;
+	photo_height: number | null;
 	// Shared by recipes that are the same dish cooked again (see lib/dupes).
 	group_id: string;
 	// Average of everyone's ratings.
@@ -82,6 +85,13 @@ async function request(path: string, init?: RequestInit) {
 
 export function photoUrl(photo: string) {
 	return `${API_URL}/photos/${photo}`;
+}
+
+// Width ÷ height to show a recipe's photo at: its real shape, kept within portrait 3:5 and
+// landscape 5:3 so no card gets absurdly tall or thin. Square when there's no size.
+export function photoAspect(recipe: Recipe) {
+	if (!recipe.photo || !recipe.photo_width || !recipe.photo_height) return 1;
+	return Math.min(5 / 3, Math.max(3 / 5, recipe.photo_width / recipe.photo_height));
 }
 
 export async function getPeople(): Promise<string[]> {

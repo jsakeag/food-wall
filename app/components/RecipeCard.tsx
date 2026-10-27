@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { photoUrl, ratingBy, type Recipe } from "../lib/api";
+import { photoAspect, photoUrl, ratingBy, type Recipe } from "../lib/api";
 import { colors, fonts, radius, timeAgo } from "../lib/theme";
 import RecipeRow from "./RecipeRow";
 import ScoreBadge from "./ScoreBadge";
@@ -16,6 +16,7 @@ export default function RecipeCard({
 	place,
 	onRate,
 	onMenu,
+	defaultExpanded = false,
 }: {
 	recipe: Recipe;
 	others: Recipe[];
@@ -24,8 +25,9 @@ export default function RecipeCard({
 	place?: number;
 	onRate: () => void;
 	onMenu: (recipe: Recipe) => void;
+	defaultExpanded?: boolean;
 }) {
-	const [expanded, setExpanded] = useState(false);
+	const [expanded, setExpanded] = useState(defaultExpanded);
 	return (
 		<Pressable
 			style={styles.card}
@@ -35,7 +37,10 @@ export default function RecipeCard({
 		>
 			<View style={styles.photoFrame}>
 				{recipe.photo ? (
-					<Image source={{ uri: photoUrl(recipe.photo) }} style={styles.photo} />
+					<Image
+						source={{ uri: photoUrl(recipe.photo) }}
+						style={[styles.photo, { aspectRatio: photoAspect(recipe) }]}
+					/>
 				) : (
 					<View style={[styles.photo, styles.noPhoto]}>
 						<Image source={require("../assets/nailong.jpg")} style={styles.noPhotoImage} />

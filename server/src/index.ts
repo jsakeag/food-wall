@@ -5,7 +5,7 @@ import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import pg from "pg";
-import { shrinkPhoto } from "./photos.ts";
+import { photoSize, shrinkPhoto } from "./photos.ts";
 
 const { DATABASE_URL, API_KEY } = process.env;
 if (!DATABASE_URL || !API_KEY) {
@@ -50,6 +50,15 @@ const upload = multer({
 		else cb(new multer.MulterError("LIMIT_UNEXPECTED_FILE", "photo"));
 	},
 });
+
+// Measure photos saved before sizes were stored. Runs in the background; the app copes without them.
+(async () => {
+	const { rows } = await pool.query("select id, photo from recipes where photo is not null and photo_width is null");
+	for (const { id, photo } of rows) {
+		const { width, height } = await photoSize(path.join(UPLOAD_DIR, photo));
+		if (width) await pool.query("update recipes set photo_width = $2, photo_height = $3 where id = $1", [id, width, height]);
+	}
+})().catch((err) => console.warn("Couldn't measure photos:", err.message));
 
 const app = express();
 
@@ -159,13 +168,14 @@ app.post("/recipes", upload.single("photo"), async (req, res) => {
 	}
 
 	const photo = req.file ? await shrinkPhoto(req.file.path) : null;
+	const size = photo ? await photoSize(path.join(UPLOAD_DIR, photo)) : { width: null, height: null };
 	const client = await pool.connect();
 	try {
 		await client.query("begin");
 		const { rows } = await client.query(
-			`insert into recipes (created_by, title, source_url, note, photo, created_at, group_id)
+			`insert into recipes (created_by, title, source_url, note, photo, created_at, group_id, photo_width, photo_height)
 			values ($1, $2, $3, $4, $5, coalesce($6, now()),
-				coalesce((select group_id from recipes where id = $7), gen_random_uuid()))
+				coalesce((select group_id from recipes where id = $7), gen_random_uuid()), $8, $9)
 			returning *`,
 			[
 				person,
@@ -175,6 +185,8 @@ app.post("/recipes", upload.single("photo"), async (req, res) => {
 				photo,
 				madeAt(req.body.made_at),
 				typeof dupe_of === "string" && isUuid(dupe_of) ? dupe_of : null,
+				size.width,
+				size.height,
 			],
 		);
 		await client.query(
@@ -215,12 +227,24 @@ app.patch("/recipes/:id", upload.single("photo"), async (req, res) => {
 		return;
 	}
 	const photo = req.file ? await shrinkPhoto(req.file.path) : null;
+	const size = photo ? await photoSize(path.join(UPLOAD_DIR, photo)) : null;
 	const { rows } = await pool.query(
 		`update recipes set title = $2, source_url = $3, note = $4, photo = coalesce($5, photo),
-			created_at = coalesce($6, created_at)
+			created_at = coalesce($6, created_at),
+			photo_width = case when $5::text is null then photo_width else $7 end,
+			photo_height = case when $5::text is null then photo_height else $8 end
 		where id = $1
 		returning *`,
-		[id, title.trim(), source_url?.trim() || null, note?.trim() || null, photo, photo ? madeAt(req.body.made_at) : null],
+		[
+			id,
+			title.trim(),
+			source_url?.trim() || null,
+			note?.trim() || null,
+			photo,
+			photo ? madeAt(req.body.made_at) : null,
+			size?.width ?? null,
+			size?.height ?? null,
+		],
 	);
 	if (req.file && before[0].photo) {
 		await unlink(path.join(UPLOAD_DIR, before[0].photo)).catch(() => {});

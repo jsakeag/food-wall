@@ -10,17 +10,20 @@ import { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	AppState,
-	FlatList,
 	Image,
+	Modal,
 	Pressable,
 	RefreshControl,
+	ScrollView,
 	StyleSheet,
 	Text,
 	TextInput,
+	useWindowDimensions,
 	View,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import DupePicker from "./components/DupePicker";
+import GridCard, { gridCardHeight } from "./components/GridCard";
 import LogSheet, { type SheetMode } from "./components/LogSheet";
 import MenuSheet, { type MenuAction } from "./components/MenuSheet";
 import RecipeCard from "./components/RecipeCard";
@@ -35,13 +38,16 @@ import {
 	unlinkDupe,
 	type Recipe,
 } from "./lib/api";
-import { groupDupes } from "./lib/dupes";
-import { confirm, notify, storage } from "./lib/platform";
+import { groupDupes, type Group } from "./lib/dupes";
+import { confirm, isWeb, notify, storage } from "./lib/platform";
 import { colors, fonts, glow, radius } from "./lib/theme";
 
 const PERSON_KEY = "person";
 const API_KEY_KEY = "apiKey";
 const nailong = require("./assets/nailong.jpg");
+const SORTS = { recent: "most recent", top: "top rated" } as const;
+const LIST_PADDING = 20;
+const COLUMN_GAP = 12;
 
 export default function App() {
 	const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
@@ -179,7 +185,8 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	const [people, setPeople] = useState<string[]>([]);
 	const [error, setError] = useState<string | null>(null);
 	const [refreshing, setRefreshing] = useState(false);
-	const [sort, setSort] = useState<"recent" | "top">("recent");
+	const [sort, setSort] = useState<keyof typeof SORTS>("recent");
+	const [sortOpen, setSortOpen] = useState(false);
 	const [sheetOpen, setSheetOpen] = useState(false);
 	const [sheetMode, setSheetMode] = useState<SheetMode>("new");
 	// The recipe being rated or edited (null when logging a new one).
@@ -189,6 +196,9 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	const [menuRecipe, setMenuRecipe] = useState<Recipe | null>(null);
 	// The recipe being marked as a dupe of another.
 	const [dupeRecipe, setDupeRecipe] = useState<Recipe | null>(null);
+	// The dish whose full card is open (by group, so it stays put when its best cook changes).
+	const [detailGroupId, setDetailGroupId] = useState<string | null>(null);
+	const { width: screenWidth } = useWindowDimensions();
 
 	const load = useCallback(async () => {
 		try {
@@ -257,6 +267,13 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 		}
 	}
 
+	// Closes the full card, then does something that opens its own sheet.
+	function fromDetail(action: () => void) {
+		setDetailGroupId(null);
+		// iOS can't present the next sheet until this one has finished closing.
+		setTimeout(action, isWeb ? 0 : 350);
+	}
+
 	async function switchPerson() {
 		if (await confirm(`you're @${person}`, "switch to the other person on this phone?", "switch")) onSwitch();
 	}
@@ -272,6 +289,18 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	const groups = groupDupes(recipes ?? []).sort((a, b) =>
 		sort === "recent" ? b.latest.localeCompare(a.latest) : (b.key.score ?? -1) - (a.key.score ?? -1),
 	);
+	const detailGroup = groups.find((g) => g.key.group_id === detailGroupId);
+
+	// Two-column masonry: each card goes into whichever column is shorter so far, so cards earlier
+	// in the order (newer, or better rated) always sit higher up the screen.
+	const columnWidth = (screenWidth - LIST_PADDING * 2 - COLUMN_GAP) / 2;
+	const columns: { group: Group; place: number }[][] = [[], []];
+	const heights = [0, 0];
+	groups.forEach((group, index) => {
+		const column = heights[0] <= heights[1] ? 0 : 1;
+		columns[column].push({ group, place: index + 1 });
+		heights[column] += gridCardHeight(group, columnWidth);
+	});
 
 	return (
 		<SafeAreaView style={styles.screen} edges={["top"]}>
@@ -281,12 +310,32 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 					<Text style={styles.avatarText}>{person[0]?.toLowerCase()}</Text>
 				</Pressable>
 			</View>
-			<View style={styles.tabs}>
-				{(["recent", "top"] as const).map((s) => (
-					<Pressable key={s} style={[styles.tab, sort === s && styles.tabActive]} onPress={() => setSort(s)}>
-						<Text style={[styles.tabText, sort === s && styles.tabTextActive]}>{s}</Text>
-					</Pressable>
-				))}
+			<View style={styles.sortRow}>
+				<Pressable
+					style={({ pressed }) => [styles.sortButton, sortOpen && styles.sortButtonOpen, pressed && styles.pressed]}
+					onPress={() => setSortOpen(!sortOpen)}
+				>
+					<Text style={styles.sortLabel}>sort</Text>
+					<Text style={styles.sortValue}>{SORTS[sort]}</Text>
+					<Text style={styles.sortLabel}>{sortOpen ? "▴" : "▾"}</Text>
+				</Pressable>
+				{sortOpen ? (
+					<View style={styles.dropdown}>
+						{(Object.keys(SORTS) as (keyof typeof SORTS)[]).map((s) => (
+							<Pressable
+								key={s}
+								style={({ pressed }) => [styles.dropdownOption, pressed && styles.dropdownPressed]}
+								onPress={() => {
+									setSort(s);
+									setSortOpen(false);
+								}}
+							>
+								<Text style={[styles.dropdownText, sort === s && styles.dropdownTextActive]}>{SORTS[s]}</Text>
+								{sort === s ? <Text style={styles.dropdownCheck}>✓</Text> : null}
+							</Pressable>
+						))}
+					</View>
+				) : null}
 			</View>
 
 			{error && !recipes ? (
@@ -296,33 +345,42 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 			) : !recipes ? (
 				<Loading />
 			) : (
-				<FlatList
-					data={groups}
-					keyExtractor={(g) => g.key.group_id}
+				<ScrollView
 					contentContainerStyle={styles.list}
 					indicatorStyle="white"
 					refreshControl={
 						<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />
 					}
-					ListEmptyComponent={
+				>
+					{groups.length === 0 ? (
 						<View style={styles.empty}>
 							<Image source={nailong} style={styles.emptyImage} />
 							<Text style={styles.emptyText}>nothing yet 🤯 tap + to log something you cooked</Text>
 						</View>
-					}
-					renderItem={({ item, index }) => (
-						<RecipeCard
-							recipe={item.key}
-							others={item.others}
-							people={people}
-							person={person}
-							place={sort === "top" ? index + 1 : undefined}
-							onRate={() => openSheet("rate", item.key)}
-							onMenu={setMenuRecipe}
-						/>
+					) : (
+						<View style={styles.columns}>
+							{columns.map((column, i) => (
+								<View key={i} style={{ width: columnWidth }}>
+									{column.map(({ group, place }) => (
+										<GridCard
+											key={group.key.group_id}
+											group={group}
+											people={people}
+											width={columnWidth}
+											place={sort === "top" ? place : undefined}
+											onPress={() => setDetailGroupId(group.key.group_id)}
+											onMenu={setMenuRecipe}
+										/>
+									))}
+								</View>
+							))}
+						</View>
 					)}
-				/>
+				</ScrollView>
 			)}
+
+			{/* Tapping anywhere else closes the sort dropdown. */}
+			{sortOpen ? <Pressable style={styles.backdrop} onPress={() => setSortOpen(false)} /> : null}
 
 			<Pressable
 				style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
@@ -330,6 +388,34 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 			>
 				<Text style={styles.fabText}>+</Text>
 			</Pressable>
+
+			<Modal
+				visible={detailGroup !== undefined}
+				animationType="slide"
+				presentationStyle="pageSheet"
+				onRequestClose={() => setDetailGroupId(null)}
+			>
+				<View style={styles.detail}>
+					<View style={styles.detailHeader}>
+						<Pressable onPress={() => setDetailGroupId(null)} hitSlop={12}>
+							<Text style={styles.detailClose}>close</Text>
+						</Pressable>
+					</View>
+					<ScrollView contentContainerStyle={styles.detailBody}>
+						{detailGroup ? (
+							<RecipeCard
+								recipe={detailGroup.key}
+								others={detailGroup.others}
+								people={people}
+								person={person}
+								defaultExpanded
+								onRate={() => fromDetail(() => openSheet("rate", detailGroup.key))}
+								onMenu={(recipe) => fromDetail(() => setMenuRecipe(recipe))}
+							/>
+						) : null}
+					</ScrollView>
+				</View>
+			</Modal>
 
 			<MenuSheet title={menuRecipe?.title ?? ""} actions={menuActions} onClose={() => setMenuRecipe(null)} />
 
@@ -410,34 +496,109 @@ const styles = StyleSheet.create({
 		fontFamily: fonts.bold,
 		color: colors.text,
 	},
-	tabs: {
+	sortRow: {
 		flexDirection: "row",
 		marginHorizontal: 20,
 		marginVertical: 14,
-		backgroundColor: colors.border,
-		borderRadius: radius.lg,
-		padding: 4,
+		// Keeps the dropdown above the list and the backdrop.
+		zIndex: 10,
 	},
-	tab: {
-		flex: 1,
+	sortButton: {
+		flexDirection: "row",
 		alignItems: "center",
+		gap: 6,
+		borderRadius: radius.lg,
+		borderWidth: 1,
+		borderColor: colors.border,
+		paddingHorizontal: 12,
 		paddingVertical: 7,
+	},
+	sortButtonOpen: {
+		borderColor: colors.muted,
+		backgroundColor: colors.card,
+	},
+	sortLabel: {
+		fontSize: 14,
+		fontFamily: fonts.regular,
+		color: colors.muted,
+	},
+	sortValue: {
+		fontSize: 14,
+		fontFamily: fonts.semibold,
+		color: colors.text,
+	},
+	dropdown: {
+		position: "absolute",
+		top: "100%",
+		left: 0,
+		marginTop: 6,
+		minWidth: 180,
+		backgroundColor: colors.card,
+		borderRadius: radius.lg,
+		borderWidth: 1,
+		borderColor: colors.border,
+		padding: 4,
+		boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+	},
+	dropdownOption: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
+		paddingHorizontal: 12,
+		paddingVertical: 10,
 		borderRadius: radius.md,
 	},
-	tabActive: {
-		backgroundColor: colors.background,
+	dropdownPressed: {
+		backgroundColor: colors.border,
 	},
-	tabText: {
-		fontSize: 14,
+	dropdownText: {
+		fontSize: 15,
 		fontFamily: fonts.medium,
 		color: colors.muted,
 	},
-	tabTextActive: {
+	dropdownTextActive: {
 		color: colors.text,
 	},
+	dropdownCheck: {
+		fontSize: 14,
+		fontFamily: fonts.bold,
+		color: colors.primary,
+	},
+	backdrop: {
+		position: "absolute",
+		top: 0,
+		right: 0,
+		bottom: 0,
+		left: 0,
+		zIndex: 5,
+	},
 	list: {
-		paddingHorizontal: 20,
+		paddingHorizontal: LIST_PADDING,
 		paddingBottom: 120,
+	},
+	columns: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		gap: COLUMN_GAP,
+	},
+	detail: {
+		flex: 1,
+		backgroundColor: colors.background,
+	},
+	detailHeader: {
+		paddingHorizontal: 16,
+		paddingVertical: 14,
+		borderBottomWidth: 1,
+		borderBottomColor: colors.border,
+	},
+	detailClose: {
+		fontSize: 16,
+		fontFamily: fonts.medium,
+		color: colors.primary,
+	},
+	detailBody: {
+		padding: LIST_PADDING,
 	},
 	empty: {
 		alignItems: "center",
