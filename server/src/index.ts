@@ -147,9 +147,9 @@ app.get("/recipes", async (_req, res) => {
 	});
 });
 
-// Logging a recipe also records the logger's rating of it.
+// Logging a recipe also records the logger's rating of it. `dupe_of` puts it in that recipe's group.
 app.post("/recipes", upload.single("photo"), async (req, res) => {
-	const { person, title, source_url, note, bucket } = req.body ?? {};
+	const { person, title, source_url, note, bucket, dupe_of } = req.body ?? {};
 	const position = Number(req.body?.position);
 	const error = ratingError(person, bucket, position) ?? (!title?.trim() ? "Title is required" : null);
 	if (error) {
@@ -163,10 +163,19 @@ app.post("/recipes", upload.single("photo"), async (req, res) => {
 	try {
 		await client.query("begin");
 		const { rows } = await client.query(
-			`insert into recipes (created_by, title, source_url, note, photo, created_at)
-			values ($1, $2, $3, $4, $5, coalesce($6, now()))
+			`insert into recipes (created_by, title, source_url, note, photo, created_at, group_id)
+			values ($1, $2, $3, $4, $5, coalesce($6, now()),
+				coalesce((select group_id from recipes where id = $7), gen_random_uuid()))
 			returning *`,
-			[person, title.trim(), source_url?.trim() || null, note?.trim() || null, photo, madeAt(req.body.made_at)],
+			[
+				person,
+				title.trim(),
+				source_url?.trim() || null,
+				note?.trim() || null,
+				photo,
+				madeAt(req.body.made_at),
+				typeof dupe_of === "string" && isUuid(dupe_of) ? dupe_of : null,
+			],
 		);
 		await client.query(
 			"insert into ratings (recipe_id, person, bucket, position) values ($1, $2, $3, $4)",
@@ -217,6 +226,40 @@ app.patch("/recipes/:id", upload.single("photo"), async (req, res) => {
 		await unlink(path.join(UPLOAD_DIR, before[0].photo)).catch(() => {});
 	}
 	res.json({ recipe: rows[0] });
+});
+
+// Mark a recipe (and anything already grouped with it) as the same dish as `dupe_of`.
+app.put("/recipes/:id/group", express.json(), async (req, res) => {
+	const { id } = req.params;
+	const dupeOf = req.body?.dupe_of;
+	if (!isUuid(id) || typeof dupeOf !== "string" || !isUuid(dupeOf)) {
+		res.status(404).json({ error: "Not found" });
+		return;
+	}
+	const { rowCount } = await pool.query(
+		`update recipes set group_id = target.group_id
+		from (select group_id from recipes where id = $2) target
+		where recipes.group_id = (select group_id from recipes where id = $1)`,
+		[id, dupeOf],
+	);
+	if (!rowCount) {
+		res.status(404).json({ error: "Not found" });
+		return;
+	}
+	res.status(204).end();
+});
+
+// Split a recipe back out of its group of dupes.
+app.delete("/recipes/:id/group", async (req, res) => {
+	const { id } = req.params;
+	const { rowCount } = isUuid(id)
+		? await pool.query("update recipes set group_id = gen_random_uuid() where id = $1", [id])
+		: { rowCount: 0 };
+	if (!rowCount) {
+		res.status(404).json({ error: "Not found" });
+		return;
+	}
+	res.status(204).end();
 });
 
 // Add (or redo) one person's rating of an existing recipe.

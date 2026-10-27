@@ -9,6 +9,9 @@ create table if not exists recipes (
     photo text
 );
 
+-- Recipes that are the same dish (cooked again) share a group_id; each starts in its own group.
+alter table recipes add column if not exists group_id uuid not null default gen_random_uuid();
+
 -- Each person rates each recipe once. Scores come from where it sits in
 -- that person's bucket, so the two people's rankings never interfere.
 create table if not exists ratings (

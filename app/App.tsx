@@ -20,10 +20,22 @@ import {
 	View,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import DupePicker from "./components/DupePicker";
 import LogSheet, { type SheetMode } from "./components/LogSheet";
 import MenuSheet, { type MenuAction } from "./components/MenuSheet";
 import RecipeCard from "./components/RecipeCard";
-import { deleteRecipe, getPeople, getRecipes, hasApiKey, ratingBy, setApiKey, type Recipe } from "./lib/api";
+import {
+	deleteRecipe,
+	getPeople,
+	getRecipes,
+	hasApiKey,
+	markDupe,
+	ratingBy,
+	setApiKey,
+	unlinkDupe,
+	type Recipe,
+} from "./lib/api";
+import { groupDupes } from "./lib/dupes";
 import { confirm, notify, storage } from "./lib/platform";
 import { colors, fonts, glow, radius } from "./lib/theme";
 
@@ -175,6 +187,8 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 	// Remounting the sheet clears its form each time it opens.
 	const [sheetKey, setSheetKey] = useState(0);
 	const [menuRecipe, setMenuRecipe] = useState<Recipe | null>(null);
+	// The recipe being marked as a dupe of another.
+	const [dupeRecipe, setDupeRecipe] = useState<Recipe | null>(null);
 
 	const load = useCallback(async () => {
 		try {
@@ -207,6 +221,10 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 			label: ratingBy(menuRecipe, person) ? "redo my rating" : "rate it",
 			onPress: () => openSheet("rate", menuRecipe),
 		},
+		{ label: "mark dupe", onPress: () => setDupeRecipe(menuRecipe) },
+		...(recipes?.some((r) => r.group_id === menuRecipe.group_id && r.id !== menuRecipe.id)
+			? [{ label: "unlink", onPress: () => unlink(menuRecipe) }]
+			: []),
 		{ label: "delete", destructive: true, onPress: () => confirmDelete(menuRecipe) },
 	];
 
@@ -217,6 +235,25 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 			await load();
 		} catch (e) {
 			notify("couldn't delete", (e as Error).message);
+		}
+	}
+
+	async function linkDupe(recipe: Recipe, dupeOf: Recipe) {
+		setDupeRecipe(null);
+		try {
+			await markDupe(recipe.id, dupeOf.id);
+			await load();
+		} catch (e) {
+			notify("couldn't mark dupe", (e as Error).message);
+		}
+	}
+
+	async function unlink(recipe: Recipe) {
+		try {
+			await unlinkDupe(recipe.id);
+			await load();
+		} catch (e) {
+			notify("couldn't unlink", (e as Error).message);
 		}
 	}
 
@@ -231,10 +268,10 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 		setSheetOpen(true);
 	}
 
-	const sorted =
-		sort === "recent"
-			? (recipes ?? [])
-			: [...(recipes ?? [])].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+	// Dupes show as one card: recent goes by when the dish was last cooked, top by its best cook.
+	const groups = groupDupes(recipes ?? []).sort((a, b) =>
+		sort === "recent" ? b.latest.localeCompare(a.latest) : (b.key.score ?? -1) - (a.key.score ?? -1),
+	);
 
 	return (
 		<SafeAreaView style={styles.screen} edges={["top"]}>
@@ -260,8 +297,8 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 				<Loading />
 			) : (
 				<FlatList
-					data={sorted}
-					keyExtractor={(r) => r.id}
+					data={groups}
+					keyExtractor={(g) => g.key.group_id}
 					contentContainerStyle={styles.list}
 					indicatorStyle="white"
 					refreshControl={
@@ -275,12 +312,13 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 					}
 					renderItem={({ item, index }) => (
 						<RecipeCard
-							recipe={item}
+							recipe={item.key}
+							others={item.others}
 							people={people}
 							person={person}
 							place={sort === "top" ? index + 1 : undefined}
-							onRate={() => openSheet("rate", item)}
-							onMenu={() => setMenuRecipe(item)}
+							onRate={() => openSheet("rate", item.key)}
+							onMenu={setMenuRecipe}
 						/>
 					)}
 				/>
@@ -294,6 +332,13 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 			</Pressable>
 
 			<MenuSheet title={menuRecipe?.title ?? ""} actions={menuActions} onClose={() => setMenuRecipe(null)} />
+
+			<DupePicker
+				recipe={dupeRecipe}
+				recipes={recipes ?? []}
+				onClose={() => setDupeRecipe(null)}
+				onPick={(dupeOf) => linkDupe(dupeRecipe!, dupeOf)}
+			/>
 
 			<LogSheet
 				key={sheetKey}

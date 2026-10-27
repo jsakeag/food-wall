@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { photoUrl, ratingBy, type Recipe } from "../lib/api";
 import { colors, fonts, radius, timeAgo } from "../lib/theme";
+import RecipeRow from "./RecipeRow";
 import ScoreBadge from "./ScoreBadge";
 
 // Same layout as a food-gallery post: bordered photo, then the details underneath.
 // The badge is the average; each person's own score sits under the title.
+// For a dish cooked more than once, `recipe` is its best-rated cook and tapping shows the `others`.
 export default function RecipeCard({
 	recipe,
+	others,
 	people,
 	person,
 	place,
@@ -14,14 +18,21 @@ export default function RecipeCard({
 	onMenu,
 }: {
 	recipe: Recipe;
+	others: Recipe[];
 	people: string[];
 	person: string;
 	place?: number;
 	onRate: () => void;
-	onMenu: () => void;
+	onMenu: (recipe: Recipe) => void;
 }) {
+	const [expanded, setExpanded] = useState(false);
 	return (
-		<Pressable style={styles.card} onLongPress={onMenu} delayLongPress={400}>
+		<Pressable
+			style={styles.card}
+			onPress={others.length > 0 ? () => setExpanded(!expanded) : undefined}
+			onLongPress={() => onMenu(recipe)}
+			delayLongPress={400}
+		>
 			<View style={styles.photoFrame}>
 				{recipe.photo ? (
 					<Image source={{ uri: photoUrl(recipe.photo) }} style={styles.photo} />
@@ -31,6 +42,11 @@ export default function RecipeCard({
 					</View>
 				)}
 				{place ? <Text style={styles.place}>#{place}</Text> : null}
+				{others.length > 0 ? (
+					<Text style={styles.cooked}>
+						cooked {others.length + 1}× {expanded ? "▴" : "▾"}
+					</Text>
+				) : null}
 				{recipe.score !== null ? (
 					<View style={styles.badge}>
 						<ScoreBadge score={recipe.score} />
@@ -40,7 +56,7 @@ export default function RecipeCard({
 
 			<View style={styles.titleRow}>
 				<Text style={styles.title}>{recipe.title}</Text>
-				<Pressable onPress={onMenu} hitSlop={12} style={({ pressed }) => pressed && { opacity: 0.5 }}>
+				<Pressable onPress={() => onMenu(recipe)} hitSlop={12} style={({ pressed }) => pressed && { opacity: 0.5 }}>
 					<Text style={styles.menu}>•••</Text>
 				</Pressable>
 			</View>
@@ -84,6 +100,18 @@ export default function RecipeCard({
 					view recipe ↗
 				</Text>
 			) : null}
+
+			{expanded ? (
+				<View style={styles.others}>
+					{others.map((other) => (
+						<RecipeRow key={other.id} recipe={other} onLongPress={() => onMenu(other)}>
+							<Pressable onPress={() => onMenu(other)} hitSlop={12}>
+								<Text style={styles.menu}>•••</Text>
+							</Pressable>
+						</RecipeRow>
+					))}
+				</View>
+			) : null}
 		</Pressable>
 	);
 }
@@ -126,6 +154,22 @@ const styles = StyleSheet.create({
 		paddingVertical: 4,
 		borderRadius: radius.md,
 		overflow: "hidden",
+	},
+	cooked: {
+		position: "absolute",
+		bottom: 12,
+		left: 12,
+		backgroundColor: colors.background,
+		color: colors.text,
+		fontFamily: fonts.semibold,
+		fontSize: 14,
+		paddingHorizontal: 10,
+		paddingVertical: 4,
+		borderRadius: radius.md,
+		overflow: "hidden",
+	},
+	others: {
+		gap: 8,
 	},
 	badge: {
 		position: "absolute",

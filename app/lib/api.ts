@@ -43,6 +43,8 @@ export type Recipe = {
 	source_url: string | null;
 	note: string | null;
 	photo: string | null;
+	// Shared by recipes that are the same dish cooked again (see lib/dupes).
+	group_id: string;
 	// Average of everyone's ratings.
 	score: number | null;
 	ratings: Rating[];
@@ -58,6 +60,8 @@ export type NewRecipe = {
 	photoUri: string | null;
 	// When the photo was taken (ISO), which becomes the recipe's date; otherwise it's now.
 	madeAt: string | null;
+	// The recipe this is a dupe of, if any.
+	dupeOf: string | null;
 };
 
 async function request(path: string, init?: RequestInit) {
@@ -98,6 +102,7 @@ export async function createRecipe(recipe: NewRecipe) {
 	form.append("position", String(recipe.position));
 	if (recipe.photoUri) await appendPhoto(form, recipe.photoUri);
 	if (recipe.madeAt) form.append("made_at", recipe.madeAt);
+	if (recipe.dupeOf) form.append("dupe_of", recipe.dupeOf);
 	await request("/recipes", { method: "POST", body: form });
 }
 
@@ -122,6 +127,19 @@ export async function rateRecipe(id: string, person: string, bucket: Bucket, pos
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ bucket, position }),
 	});
+}
+
+// Groups `id` (and anything already grouped with it) with `dupeOf` as the same dish.
+export async function markDupe(id: string, dupeOf: string) {
+	await request(`/recipes/${id}/group`, {
+		method: "PUT",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ dupe_of: dupeOf }),
+	});
+}
+
+export async function unlinkDupe(id: string) {
+	await request(`/recipes/${id}/group`, { method: "DELETE" });
 }
 
 export function ratingBy(recipe: Recipe, person: string) {

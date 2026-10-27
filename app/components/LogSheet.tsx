@@ -15,9 +15,11 @@ import {
 	View,
 } from "react-native";
 import { createRecipe, photoUrl, rateRecipe, ratingBy, updateRecipe, type Bucket, type Recipe } from "../lib/api";
+import { likelyDupes } from "../lib/dupes";
 import { answer, isDone, midpoint, positionAt, startSearch, tie, type Search } from "../lib/ranking";
 import { isWeb, notify } from "../lib/platform";
 import { BUCKETS, colors, fonts, radius } from "../lib/theme";
+import RecipeRow from "./RecipeRow";
 
 const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
 	mediaTypes: "images",
@@ -65,7 +67,7 @@ export default function LogSheet({
 	onClose: () => void;
 	onSaved: () => void;
 }) {
-	const [step, setStep] = useState<"form" | "compare" | "saving">("form");
+	const [step, setStep] = useState<"form" | "dupe" | "compare" | "saving">("form");
 	const [photoUri, setPhotoUri] = useState<string | null>(null);
 	const [madeAt, setMadeAt] = useState<string | null>(null);
 	const [title, setTitle] = useState(existing?.title ?? "");
@@ -77,6 +79,9 @@ export default function LogSheet({
 	// Recipes this person put in the chosen bucket, best first.
 	const [list, setList] = useState<{ recipe: Recipe; position: number }[]>([]);
 	const [search, setSearch] = useState<Search>({ lo: 0, hi: 0 });
+	// Logged recipes that look like the same dish, and the one picked as "same as", if any.
+	const [dupes, setDupes] = useState<Recipe[]>([]);
+	const [dupeOf, setDupeOf] = useState<string | null>(null);
 
 	async function pickPhoto(source: "camera" | "library") {
 		if (source === "camera") {
@@ -105,7 +110,7 @@ export default function LogSheet({
 		]);
 	}
 
-	async function save(position: number) {
+	async function save(position: number, sameAs = dupeOf) {
 		setStep("saving");
 		try {
 			if (mode === "rate") {
@@ -120,6 +125,7 @@ export default function LogSheet({
 					position,
 					photoUri,
 					madeAt,
+					dupeOf: sameAs,
 				});
 			}
 			onSaved();
@@ -144,6 +150,20 @@ export default function LogSheet({
 		if (!title.trim()) return notify("give the recipe a name");
 		if (mode === "edit") return saveEdit();
 		if (!bucket) return notify("how was it?", "pick loved it, it was fine or didn't like it.");
+		if (mode === "new") {
+			const matches = likelyDupes(title, recipes);
+			if (matches.length > 0) {
+				setDupes(matches);
+				setStep("dupe");
+				return;
+			}
+		}
+		rank(null);
+	}
+
+	// Rate it against this person's other recipes in the bucket (each cook of a dupe is rated too).
+	function rank(sameAs: string | null) {
+		setDupeOf(sameAs);
 		const candidates = recipes
 			.filter((r) => r.id !== existing?.id)
 			.flatMap((recipe) => {
@@ -151,7 +171,7 @@ export default function LogSheet({
 				return mine?.bucket === bucket ? [{ recipe, position: mine.position }] : [];
 			})
 			.sort((a, b) => b.position - a.position);
-		if (candidates.length === 0) return save(positionAt(candidates, 0));
+		if (candidates.length === 0) return save(positionAt(candidates, 0), sameAs);
 		setList(candidates);
 		setSearch(startSearch(candidates));
 		setStep("compare");
@@ -167,15 +187,16 @@ export default function LogSheet({
 	// What the recipe will look like: a newly picked photo wins over the saved one.
 	const newPhoto = photoUri ?? savedPhoto;
 	const heading = { new: "log a recipe", rate: "rate it", edit: "edit details" }[mode];
+	const headerTitle = { form: heading, dupe: "cooked this before? 🤔", compare: "which was better? 🤔", saving: heading }[step];
 
 	return (
 		<Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
 			<KeyboardAvoidingView behavior="padding" style={styles.sheet}>
 				<View style={styles.header}>
-					<Pressable onPress={step === "compare" ? () => setStep("form") : onClose} hitSlop={12}>
-						<Text style={styles.headerButton}>{step === "compare" ? "back" : "cancel"}</Text>
+					<Pressable onPress={step === "form" ? onClose : () => setStep("form")} hitSlop={12}>
+						<Text style={styles.headerButton}>{step === "form" ? "cancel" : "back"}</Text>
 					</Pressable>
-					<Text style={styles.headerTitle}>{step === "compare" ? "which was better? 🤔" : heading}</Text>
+					<Text style={styles.headerTitle}>{headerTitle}</Text>
 					<View style={{ width: 56 }} />
 				</View>
 
@@ -183,6 +204,18 @@ export default function LogSheet({
 					<View style={styles.center}>
 						<ActivityIndicator size="large" color={colors.primary} />
 					</View>
+				) : step === "dupe" ? (
+					<ScrollView contentContainerStyle={styles.form}>
+						<Text style={styles.label}>is it the same as one of these?</Text>
+						{dupes.map((recipe) => (
+							<RecipeRow key={recipe.id} recipe={recipe} onPress={() => rank(recipe.id)}>
+								<Text style={styles.sameAs}>same</Text>
+							</RecipeRow>
+						))}
+						<Pressable style={styles.secondaryButton} onPress={() => rank(null)}>
+							<Text style={styles.secondaryButtonText}>{"no, it's something new"}</Text>
+						</Pressable>
+					</ScrollView>
 				) : step === "compare" && other ? (
 					<View style={styles.compare}>
 						<View style={styles.choices}>
@@ -497,6 +530,11 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		fontFamily: fonts.semibold,
 		color: colors.text,
+	},
+	sameAs: {
+		fontSize: 14,
+		fontFamily: fonts.semibold,
+		color: colors.primary,
 	},
 	secondaryButton: {
 		alignSelf: "center",
