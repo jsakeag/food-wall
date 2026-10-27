@@ -1,3 +1,4 @@
+import type { ImageSourcePropType } from "react-native";
 import type { Bucket } from "./api";
 
 // food-gallery's "nailong kitchen" look: shadcn's dark slate palette.
@@ -29,10 +30,10 @@ export const radius = {
 // The auth page's glowBox: white core, magenta then cyan halo.
 export const glow = "0 0 60px 30px #fff, 0 0 100px 60px #f0f, 0 0 140px 90px #0ff";
 
-export const BUCKETS: { value: Bucket; label: string; emoji: string }[] = [
-	{ value: "loved", label: "loved it", emoji: "😍" },
-	{ value: "fine", label: "it was fine", emoji: "🙂" },
-	{ value: "disliked", label: "didn't like it", emoji: "😕" },
+export const BUCKETS: { value: Bucket; label: string; image: ImageSourcePropType }[] = [
+	{ value: "loved", label: "loved it", image: require("../assets/nailong_good.png") },
+	{ value: "fine", label: "it was fine", image: require("../assets/nailong_okay.png") },
+	{ value: "disliked", label: "didn't like it", image: require("../assets/nailong_bad.png") },
 ];
 
 export function timeAgo(dateString: string) {

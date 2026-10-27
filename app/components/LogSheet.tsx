@@ -299,7 +299,7 @@ export default function LogSheet({
 											style={[styles.bucket, bucket === b.value && styles.bucketSelected]}
 											onPress={() => setBucket(b.value)}
 										>
-											<Text style={styles.bucketEmoji}>{b.emoji}</Text>
+											<Image source={b.image} style={styles.bucketImage} resizeMode="contain" />
 											<Text style={styles.bucketLabel}>{b.label}</Text>
 										</Pressable>
 									))}
@@ -436,8 +436,9 @@ const styles = StyleSheet.create({
 		borderColor: colors.primary,
 		backgroundColor: colors.card,
 	},
-	bucketEmoji: {
-		fontSize: 28,
+	bucketImage: {
+		width: 56,
+		height: 56,
 	},
 	bucketLabel: {
 		fontSize: 13,
