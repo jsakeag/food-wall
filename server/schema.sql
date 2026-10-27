@@ -16,6 +16,9 @@ alter table recipes add column if not exists group_id uuid not null default gen_
 alter table recipes add column if not exists photo_width integer;
 alter table recipes add column if not exists photo_height integer;
 
+-- Recipes only the person who logged them should see.
+alter table recipes add column if not exists only_me boolean not null default false;
+
 -- Each person rates each recipe once. Scores come from where it sits in
 -- that person's bucket, so the two people's rankings never interfere.
 create table if not exists ratings (

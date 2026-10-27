@@ -117,9 +117,15 @@ function madeAt(value: unknown) {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-app.get("/recipes", async (_req, res) => {
+// Form fields arrive as strings: "true" or "false", or missing to leave as is.
+const flag = (value: unknown) => (value === "true" ? true : value === "false" ? false : null);
+
+// `?person=` is who's looking: they also see their own "only me" recipes.
+app.get("/recipes", async (req, res) => {
 	const [{ rows: recipes }, { rows: ratings }] = await Promise.all([
-		pool.query("select * from recipes order by created_at desc"),
+		pool.query("select * from recipes where not only_me or created_by = $1 order by created_at desc", [
+			String(req.query.person ?? ""),
+		]),
 		pool.query(`
 			select recipe_id, person, bucket, position,
 				row_number() over w as rank,
@@ -173,9 +179,9 @@ app.post("/recipes", upload.single("photo"), async (req, res) => {
 	try {
 		await client.query("begin");
 		const { rows } = await client.query(
-			`insert into recipes (created_by, title, source_url, note, photo, created_at, group_id, photo_width, photo_height)
+			`insert into recipes (created_by, title, source_url, note, photo, created_at, group_id, photo_width, photo_height, only_me)
 			values ($1, $2, $3, $4, $5, coalesce($6, now()),
-				coalesce((select group_id from recipes where id = $7), gen_random_uuid()), $8, $9)
+				coalesce((select group_id from recipes where id = $7), gen_random_uuid()), $8, $9, $10)
 			returning *`,
 			[
 				person,
@@ -187,6 +193,7 @@ app.post("/recipes", upload.single("photo"), async (req, res) => {
 				typeof dupe_of === "string" && isUuid(dupe_of) ? dupe_of : null,
 				size.width,
 				size.height,
+				flag(req.body.only_me) ?? false,
 			],
 		);
 		await client.query(
@@ -232,7 +239,8 @@ app.patch("/recipes/:id", upload.single("photo"), async (req, res) => {
 		`update recipes set title = $2, source_url = $3, note = $4, photo = coalesce($5, photo),
 			created_at = coalesce($6, created_at),
 			photo_width = case when $5::text is null then photo_width else $7 end,
-			photo_height = case when $5::text is null then photo_height else $8 end
+			photo_height = case when $5::text is null then photo_height else $8 end,
+			only_me = coalesce($9, only_me)
 		where id = $1
 		returning *`,
 		[
@@ -244,6 +252,7 @@ app.patch("/recipes/:id", upload.single("photo"), async (req, res) => {
 			photo ? madeAt(req.body.made_at) : null,
 			size?.width ?? null,
 			size?.height ?? null,
+			flag(req.body.only_me),
 		],
 	);
 	if (req.file && before[0].photo) {

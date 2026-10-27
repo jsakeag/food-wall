@@ -77,6 +77,9 @@ export default function LogSheet({
 	const [title, setTitle] = useState(existing?.title ?? "");
 	const [sourceUrl, setSourceUrl] = useState(existing?.source_url ?? "");
 	const [note, setNote] = useState(existing?.note ?? "");
+	const [onlyMe, setOnlyMe] = useState(existing?.only_me ?? false);
+	// Only whoever logged a recipe decides whether others can see it.
+	const canSetOnlyMe = mode === "new" || existing?.created_by === person;
 	const [bucket, setBucket] = useState<Bucket | null>(
 		existing && mode === "rate" ? (ratingBy(existing, person)?.bucket ?? null) : null,
 	);
@@ -134,6 +137,7 @@ export default function LogSheet({
 					photoUri,
 					madeAt,
 					dupeOf: sameAs,
+					onlyMe,
 				});
 			}
 			onSaved();
@@ -146,7 +150,7 @@ export default function LogSheet({
 	async function saveEdit() {
 		setStep("saving");
 		try {
-			await updateRecipe(existing!.id, { title: title.trim(), source_url: sourceUrl, note, photoUri, madeAt });
+			await updateRecipe(existing!.id, { title: title.trim(), source_url: sourceUrl, note, photoUri, madeAt, onlyMe: canSetOnlyMe ? onlyMe : undefined });
 			onSaved();
 		} catch (error) {
 			notify("couldn't save", (error as Error).message);
@@ -360,6 +364,17 @@ export default function LogSheet({
 									onChangeText={setNote}
 									multiline
 								/>
+								{canSetOnlyMe ? (
+									<Pressable style={styles.checkRow} onPress={() => setOnlyMe(!onlyMe)} hitSlop={6}>
+										<View style={[styles.checkbox, onlyMe && styles.checkboxOn]}>
+											{onlyMe ? <Text style={styles.checkmark}>✓</Text> : null}
+										</View>
+										<View style={{ flex: 1 }}>
+											<Text style={styles.checkLabel}>only me 🔒</Text>
+											<Text style={styles.checkHint}>only you will see this recipe</Text>
+										</View>
+									</Pressable>
+								) : null}
 							</>
 						)}
 
@@ -486,6 +501,40 @@ const styles = StyleSheet.create({
 	noteInput: {
 		minHeight: 80,
 		textAlignVertical: "top",
+	},
+	checkRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		paddingVertical: 4,
+	},
+	checkbox: {
+		width: 24,
+		height: 24,
+		borderRadius: radius.md,
+		borderWidth: 2,
+		borderColor: colors.muted,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	checkboxOn: {
+		borderColor: colors.primary,
+		backgroundColor: colors.primary,
+	},
+	checkmark: {
+		fontSize: 14,
+		fontFamily: fonts.bold,
+		color: colors.primaryText,
+	},
+	checkLabel: {
+		fontSize: 15,
+		fontFamily: fonts.semibold,
+		color: colors.text,
+	},
+	checkHint: {
+		fontSize: 13,
+		fontFamily: fonts.regular,
+		color: colors.muted,
 	},
 	label: {
 		fontSize: 15,

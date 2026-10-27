@@ -101,7 +101,10 @@ export default function RecipeCard({
 
 			<View style={styles.metaRow}>
 				<Text style={styles.note}>{recipe.note}</Text>
-				<Text style={styles.time}>{timeAgo(recipe.created_at)}</Text>
+				<Text style={styles.time}>
+					{recipe.only_me ? "🔒 only me · " : ""}
+					{timeAgo(recipe.created_at)}
+				</Text>
 			</View>
 			{recipe.source_url ? (
 				<Text style={styles.link} onPress={() => Linking.openURL(recipe.source_url!)}>

@@ -46,6 +46,8 @@ export type Recipe = {
 	// The photo's upright size (null for old photos not measured yet).
 	photo_width: number | null;
 	photo_height: number | null;
+	// Only the person who logged it sees it.
+	only_me: boolean;
 	// Shared by recipes that are the same dish cooked again (see lib/dupes).
 	group_id: string;
 	// Average of everyone's ratings.
@@ -65,6 +67,7 @@ export type NewRecipe = {
 	madeAt: string | null;
 	// The recipe this is a dupe of, if any.
 	dupeOf: string | null;
+	onlyMe: boolean;
 };
 
 async function request(path: string, init?: RequestInit) {
@@ -98,8 +101,9 @@ export async function getPeople(): Promise<string[]> {
 	return (await (await request("/people")).json()).people;
 }
 
-export async function getRecipes(): Promise<Recipe[]> {
-	return (await (await request("/recipes")).json()).recipes;
+// Everything `person` can see: all shared recipes plus their own "only me" ones.
+export async function getRecipes(person: string): Promise<Recipe[]> {
+	return (await (await request(`/recipes?person=${encodeURIComponent(person)}`)).json()).recipes;
 }
 
 export async function createRecipe(recipe: NewRecipe) {
@@ -113,12 +117,21 @@ export async function createRecipe(recipe: NewRecipe) {
 	if (recipe.photoUri) await appendPhoto(form, recipe.photoUri);
 	if (recipe.madeAt) form.append("made_at", recipe.madeAt);
 	if (recipe.dupeOf) form.append("dupe_of", recipe.dupeOf);
+	form.append("only_me", String(recipe.onlyMe));
 	await request("/recipes", { method: "POST", body: form });
 }
 
 export async function updateRecipe(
 	id: string,
-	changes: { title: string; source_url: string; note: string; photoUri: string | null; madeAt: string | null },
+	changes: {
+		title: string;
+		source_url: string;
+		note: string;
+		photoUri: string | null;
+		madeAt: string | null;
+		// Left out when this person can't change it (someone else logged the recipe).
+		onlyMe?: boolean;
+	},
 ) {
 	const form = new FormData();
 	form.append("title", changes.title);
@@ -128,6 +141,7 @@ export async function updateRecipe(
 	if (changes.photoUri) await appendPhoto(form, changes.photoUri);
 	// A new photo's date moves the recipe to when that photo was taken.
 	if (changes.madeAt) form.append("made_at", changes.madeAt);
+	if (changes.onlyMe !== undefined) form.append("only_me", String(changes.onlyMe));
 	await request(`/recipes/${id}`, { method: "PATCH", body: form });
 }
 

@@ -213,14 +213,14 @@ function Recipes({ person, onSwitch }: { person: string; onSwitch: () => void })
 
 	const load = useCallback(async () => {
 		try {
-			const [nextRecipes, nextPeople] = await Promise.all([getRecipes(), getPeople()]);
+			const [nextRecipes, nextPeople] = await Promise.all([getRecipes(person), getPeople()]);
 			setRecipes(nextRecipes);
 			setPeople(nextPeople);
 			setError(null);
 		} catch (e) {
 			setError((e as Error).message);
 		}
-	}, []);
+	}, [person]);
 	useEffect(() => {
 		load();
 		// Pick up the other person's changes when coming back to the app.

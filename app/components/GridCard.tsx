@@ -54,6 +54,7 @@ export default function GridCard({
 					</View>
 				) : null}
 				{others.length > 0 ? <Text style={styles.cooked}>cooked {others.length + 1}×</Text> : null}
+				{key.only_me ? <Text style={styles.onlyMe}>🔒</Text> : null}
 			</View>
 
 			<Text style={styles.title} numberOfLines={TITLE_LINES}>
@@ -128,6 +129,17 @@ const styles = StyleSheet.create({
 		fontFamily: fonts.semibold,
 		fontSize: 12,
 		paddingHorizontal: 8,
+		paddingVertical: 3,
+		borderRadius: radius.md,
+		overflow: "hidden",
+	},
+	onlyMe: {
+		position: "absolute",
+		bottom: 8,
+		right: 8,
+		backgroundColor: colors.background,
+		fontSize: 12,
+		paddingHorizontal: 6,
 		paddingVertical: 3,
 		borderRadius: radius.md,
 		overflow: "hidden",
