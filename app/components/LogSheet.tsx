@@ -79,6 +79,8 @@ export default function LogSheet({
 	// Recipes this person put in the chosen bucket, best first.
 	const [list, setList] = useState<{ recipe: Recipe; position: number }[]>([]);
 	const [search, setSearch] = useState<Search>({ lo: 0, hi: 0 });
+	// Where the search was before each answer, so "undo" can step back one comparison at a time.
+	const [history, setHistory] = useState<Search[]>([]);
 	// Logged recipes that look like the same dish, and the one picked as "same as", if any.
 	const [dupes, setDupes] = useState<Recipe[]>([]);
 	const [dupeOf, setDupeOf] = useState<string | null>(null);
@@ -174,12 +176,19 @@ export default function LogSheet({
 		if (candidates.length === 0) return save(positionAt(candidates, 0), sameAs);
 		setList(candidates);
 		setSearch(startSearch(candidates));
+		setHistory([]);
 		setStep("compare");
 	}
 
 	function settle(nextSearch: Search) {
-		if (isDone(nextSearch)) save(positionAt(list, nextSearch.lo));
-		else setSearch(nextSearch);
+		if (isDone(nextSearch)) return save(positionAt(list, nextSearch.lo));
+		setHistory([...history, search]);
+		setSearch(nextSearch);
+	}
+
+	function undo() {
+		setSearch(history[history.length - 1]);
+		setHistory(history.slice(0, -1));
 	}
 
 	const other = list[midpoint(search)]?.recipe;
@@ -234,6 +243,11 @@ export default function LogSheet({
 						<Pressable style={styles.secondaryButton} onPress={() => settle(tie(search))}>
 							<Text style={styles.secondaryButtonText}>too close to call</Text>
 						</Pressable>
+						{history.length > 0 ? (
+							<Pressable style={styles.undoButton} onPress={undo} hitSlop={12}>
+								<Text style={styles.undoText}>↩ undo</Text>
+							</Pressable>
+						) : null}
 					</View>
 				) : (
 					<ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
@@ -544,6 +558,16 @@ const styles = StyleSheet.create({
 		borderRadius: radius.md,
 		borderWidth: 1,
 		borderColor: colors.border,
+	},
+	undoButton: {
+		alignSelf: "center",
+		paddingVertical: 6,
+		paddingHorizontal: 12,
+	},
+	undoText: {
+		fontSize: 15,
+		fontFamily: fonts.medium,
+		color: colors.muted,
 	},
 	secondaryButtonText: {
 		fontSize: 15,
